@@ -49,6 +49,31 @@ struct SyncDownloadCollector {
             )
         }
 
+        let shots = try await Shot.query(on: database)
+            .join(Scene.self, on: \Shot.$scene.$id == \Scene.$id)
+            .join(Project.self, on: \Scene.$project.$id == \Project.$id)
+            .filter(Project.self, \.$user.$id == user.id)
+            .filter(\.$deletedAt == nil)
+            .all()
+
+        changes += shots.map { shot in
+            DownloadChange(
+                entity: .shot,
+                operation: .upsert,
+                id: shot.id!,
+                updatedAt: shot.updatedAt,
+                payload: [
+                    "sceneID": shot.$scene.id.uuidString,
+                    "title": shot.title,
+                    "notes": shot.notes ?? "",
+                    "shotSize": shot.shotSize ?? "",
+                    "cameraMovement": shot.cameraMovement ?? "",
+                    "lensMM": shot.lensMM.map { "\($0)" } ?? "",
+                    "sortOrder": "\(shot.sortOrder)"
+                ]
+            )
+        }
+
         return changes
     }
 }

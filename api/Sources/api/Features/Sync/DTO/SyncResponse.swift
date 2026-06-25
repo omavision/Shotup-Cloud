@@ -3,7 +3,7 @@ import Vapor
 struct SyncResponse: Content {
     let syncToken: String
     let serverTime: Date
-    let changes: [SyncChange]
+    let changes: [DownloadChange]
     let conflicts: [SyncConflict]
 }
 

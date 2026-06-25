@@ -30,7 +30,7 @@ let package = Package(
             name: "apiTests",
             dependencies: [
                 .target(name: "api"),
-                .product(name: "VaporTesting", package: "vapor"),
+                .product(name: "XCTVapor", package: "vapor"),
             ],
             swiftSettings: swiftSettings
         )

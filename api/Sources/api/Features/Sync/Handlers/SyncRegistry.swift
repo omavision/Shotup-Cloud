@@ -7,7 +7,8 @@ struct SyncRegistry {
     init(database: any Database) {
         handlers = [
             ProjectSyncHandler(database: database),
-            SceneSyncHandler(database: database)
+            SceneSyncHandler(database: database),
+            ShotSyncHandler(database: database)
         ]
     }
 

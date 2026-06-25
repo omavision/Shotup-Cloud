@@ -4,6 +4,7 @@ import Vapor
 struct AuthController: RouteCollection {
     func boot(routes: any RoutesBuilder) throws {
         routes.post("dev-login", use: devLogin)
+        routes.post("refresh", use: refresh)
     }
 
     @Sendable
@@ -40,6 +41,27 @@ struct AuthController: RouteCollection {
                 tokenType: "Bearer",
                 expiresIn: 3600,
                 user: try UserDTO(user: user)
+            )
+        )
+    }
+
+    @Sendable
+    func refresh(req: Request) async throws -> APIResponse<AuthResponse> {
+        let request = try req.content.decode(RefreshTokenRequest.self)
+
+        let rotated = try await RefreshTokenService(database: req.db)
+            .rotateRefreshToken(request.refreshToken, deviceName: "Development Device")
+
+        let accessToken = try await JWTService(application: req.application)
+            .signAccessToken(for: rotated.user)
+
+        return APIResponse(
+            data: AuthResponse(
+                accessToken: accessToken,
+                refreshToken: rotated.refreshToken,
+                tokenType: "Bearer",
+                expiresIn: 3600,
+                user: try UserDTO(user: rotated.user)
             )
         )
     }

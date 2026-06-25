@@ -31,6 +31,8 @@ struct SyncService {
             }
         }
 
+        let syncToken = try await latestSyncToken(for: user)
+
         let downloadChanges = try await SyncDownloadCollector(database: database)
             .collectChanges(
                 for: user,
@@ -38,10 +40,19 @@ struct SyncService {
             )
 
         return SyncResponse(
-            syncToken: UUID().uuidString,
+            syncToken: syncToken,
             serverTime: Date(),
             changes: downloadChanges,
             conflicts: conflicts
         )
+    }
+
+    private func latestSyncToken(for user: AuthenticatedUser) async throws -> String {
+        let latestEvent = try await SyncEvent.query(on: database)
+            .filter(\.$user.$id == user.id)
+            .sort(\.$sequence, .descending)
+            .first()
+
+        return String(latestEvent?.sequence ?? 0)
     }
 }

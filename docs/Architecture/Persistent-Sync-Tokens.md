@@ -4,7 +4,7 @@
 
 M4.5 Production Hardening moves Shotup Cloud from successful manual sync validation toward a reliable backend contract for the iOS SQLite sync client.
 
-The current synchronization engine returns a random UUID as `syncToken` after each `/sync` request. That token proves the server completed a response, but it does not identify a durable position in the change stream. M4.5 Phase 3 introduces persistent sync tokens using Option C: Global Sync Sequence.
+The previous synchronization engine returned a random UUID as `syncToken` after each `/sync` request. That token proved the server completed a response, but it did not identify a durable position in the change stream. M4.5 Phase 3 introduced persistent sync tokens using Option C: Global Sync Sequence.
 
 ## Goals
 
@@ -18,7 +18,7 @@ The current synchronization engine returns a random UUID as `syncToken` after ea
 
 Random UUID tokens are opaque but not meaningful.
 
-Current behavior:
+Previous behavior:
 
 ```text
 Client syncs -> server returns UUID token -> client stores UUID token
@@ -70,7 +70,9 @@ Timestamp filtering may still be useful for diagnostics, but it should not be th
 
 Shotup Cloud will use a global monotonically increasing sequence for sync-visible events.
 
-Each sync-visible mutation writes a `SyncEvent` row. The database assigns each event the next sequence value. The latest sequence seen by the client becomes the next `lastSyncToken`.
+Each sync-visible mutation writes a `SyncEvent` row. The current implementation computes the next sequence in application code by reading the latest known sequence and writing `latest + 1`. The latest sequence seen by the client becomes the next `lastSyncToken`.
+
+This keeps the M4.5 implementation simple, but a future production hardening pass may replace application-computed sequence values with a PostgreSQL sequence or another database-enforced allocator for stronger concurrency guarantees.
 
 Conceptually:
 
@@ -120,7 +122,7 @@ Conceptual fields:
 
 | Field | Purpose |
 | --- | --- |
-| `sequence` | Monotonically increasing server-assigned sync cursor. |
+| `sequence` | Monotonically increasing server-assigned sync cursor. Currently computed by application code as latest sequence + 1. |
 | `entity` | Entity type, such as `project`, `scene`, or `shot`. |
 | `operation` | Sync operation, such as `upsert` or `delete`. |
 | `entityID` | UUID of the changed entity. |
@@ -254,17 +256,17 @@ For `delete`:
 
 The entity mutation and `SyncEvent` creation should happen together as one durable operation where practical.
 
-## Future Download Collector Behavior
+## Download Collector Behavior
 
-The current download collector reads active Project, Scene, and Shot rows directly. M4.5 will evolve it to read from `SyncEvents`.
+The download collector has two modes.
 
-Current model:
+Initial sync model:
 
 ```text
 Download all active entities for user
 ```
 
-Future model:
+Incremental sync model:
 
 ```text
 Download only events where sequence > lastSyncToken
@@ -288,7 +290,7 @@ M4.5 sync tokens should be returned as strings to preserve the existing API shap
 }
 ```
 
-The value represents the latest global sync sequence included in the response.
+The value represents the latest per-user sync sequence known to the server when the response is produced.
 
 Future token formats may become more structured while remaining opaque to clients:
 
@@ -394,7 +396,7 @@ userID: current user
 ## Risks And Limitations
 
 - A global event log can grow quickly and will need retention planning.
-- Sequence generation must be database-backed, not process-local.
+- Sequence generation is currently application-computed as latest sequence + 1, which is simple but less robust under concurrent writers than a PostgreSQL sequence or equivalent database-backed allocator.
 - Event creation must not be skipped when entity writes succeed.
 - Backfilling events for existing data may be needed for non-empty environments.
 - Delete events require enough metadata for clients to apply tombstones.

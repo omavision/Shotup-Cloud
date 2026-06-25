@@ -13,7 +13,7 @@ struct SyncController: RouteCollection {
 
         req.logger.info("Sync request received from device \(request.deviceID) with \(request.changes.count) changes")
 
-        let response = try await SyncService()
+        let response = try await SyncService(database: req.db)
             .synchronize(
                 request: request,
                 user: user

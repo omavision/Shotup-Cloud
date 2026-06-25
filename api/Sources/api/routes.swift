@@ -6,15 +6,20 @@ func routes(_ app: Application) throws {
 
     try v1.register(collection: HealthController())
 
-    let users = v1.grouped("users")
-    try users.register(collection: UserController())
-
-    let projects = v1.grouped("projects")
-    try projects.register(collection: ProjectController())
-
-    let scenes = v1.grouped("scenes")
-    try scenes.register(collection: SceneController())
-
     let auth = v1.grouped("auth")
     try auth.register(collection: AuthController())
+
+    let protected = v1.grouped(JWTAuthenticator())
+
+    let me = protected.grouped("me")
+    try me.register(collection: MeController())
+
+    let users = protected.grouped("users")
+    try users.register(collection: UserController())
+
+    let projects = protected.grouped("projects")
+    try projects.register(collection: ProjectController())
+
+    let scenes = protected.grouped("scenes")
+    try scenes.register(collection: SceneController())
 }

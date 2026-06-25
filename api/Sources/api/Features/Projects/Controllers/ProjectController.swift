@@ -9,26 +9,29 @@ struct ProjectController: RouteCollection {
 
     @Sendable
     func listProjects(req: Request) async throws -> APIResponse<[ProjectDTO]> {
-        guard let userIDString = req.query[String.self, at: "userID"],
-              let userID = UUID(uuidString: userIDString) else {
-            throw Abort(.badRequest, reason: "Missing or invalid userID")
-        }
+        let auth = try req.auth.require(AuthenticatedUser.self)
 
         let repository = ProjectRepository(database: req.db)
         let service = ProjectService(repository: repository)
 
-        let projects = try await service.listProjects(for: userID)
+        let projects = try await service.listProjects(for: auth.id)
         return APIResponse(data: projects)
     }
 
     @Sendable
     func createProject(req: Request) async throws -> APIResponse<ProjectDTO> {
+        let auth = try req.auth.require(AuthenticatedUser.self)
         let request = try req.content.decode(CreateProjectRequest.self)
 
         let repository = ProjectRepository(database: req.db)
         let service = ProjectService(repository: repository)
 
-        let project = try await service.createProject(from: request)
+        let project = try await service.createProject(
+            userID: auth.id,
+            title: request.title,
+            notes: request.notes
+        )
+
         return APIResponse(data: project)
     }
 }

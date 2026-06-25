@@ -20,4 +20,12 @@ struct ProjectRepository {
         try await project.save(on: database)
         return project
     }
+
+    func findOwnedProject(id projectID: UUID, userID: UUID) async throws -> Project? {
+        try await Project.query(on: database)
+            .filter(\.$id == projectID)
+            .filter(\.$user.$id == userID)
+            .filter(\.$deletedAt == nil)
+            .first()
+    }
 }

@@ -8,14 +8,22 @@ struct ProjectService {
         return try projects.map { try ProjectDTO(project: $0) }
     }
 
-    func createProject(from request: CreateProjectRequest) async throws -> ProjectDTO {
+    func createProject(userID: UUID, title: String, notes: String?) async throws -> ProjectDTO {
         let project = Project(
-            userID: request.userID,
-            title: request.title,
-            notes: request.notes
+            userID: userID,
+            title: title,
+            notes: notes
         )
 
         let savedProject = try await repository.create(project)
         return try ProjectDTO(project: savedProject)
+    }
+
+    func requireOwnedProject(id projectID: UUID, userID: UUID) async throws -> Project {
+        guard let project = try await repository.findOwnedProject(id: projectID, userID: userID) else {
+            throw Abort(.notFound, reason: "Project not found")
+        }
+
+        return project
     }
 }

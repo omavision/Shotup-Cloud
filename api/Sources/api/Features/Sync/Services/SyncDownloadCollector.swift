@@ -125,6 +125,18 @@ struct SyncDownloadCollector {
             return nil
         }
 
+        guard let operation = SyncOperation(rawValue: event.operation) else {
+            return nil
+        }
+
+        if operation == .delete {
+            return tombstoneDownloadChange(
+                entity: entity,
+                id: event.entityID,
+                updatedAt: event.createdAt
+            )
+        }
+
         switch entity {
         case .project:
             guard let project = try await Project.query(on: database)
@@ -168,6 +180,20 @@ struct SyncDownloadCollector {
         case .media, .cameraSetup, .lensSetup:
             return nil
         }
+    }
+
+    private func tombstoneDownloadChange(
+        entity: SyncEntity,
+        id: UUID,
+        updatedAt: Date
+    ) -> DownloadChange {
+        DownloadChange(
+            entity: entity,
+            operation: .delete,
+            id: id,
+            updatedAt: updatedAt,
+            payload: nil
+        )
     }
 
     private func projectDownloadChange(_ project: Project) -> DownloadChange {

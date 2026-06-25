@@ -8,9 +8,7 @@ struct SyncService {
         request: SyncRequest,
         user: AuthenticatedUser
     ) async throws -> SyncResponse {
-
         let registry = SyncRegistry(database: database)
-
         var conflicts: [SyncConflict] = []
 
         for change in request.changes {
@@ -33,10 +31,16 @@ struct SyncService {
             }
         }
 
+        let downloadChanges = try await SyncDownloadCollector(database: database)
+            .collectChanges(
+                for: user,
+                since: request.lastSyncToken
+            )
+
         return SyncResponse(
             syncToken: UUID().uuidString,
             serverTime: Date(),
-            changes: [],
+            changes: downloadChanges,
             conflicts: conflicts
         )
     }

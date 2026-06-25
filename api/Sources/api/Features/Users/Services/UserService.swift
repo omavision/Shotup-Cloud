@@ -10,4 +10,15 @@ struct UserService {
 
         return try UserDTO(user: user)
     }
+
+    func createUser(from request: CreateUserRequest) async throws -> UserDTO {
+        let user = User(
+            appleUserID: request.appleUserID,
+            email: request.email,
+            displayName: request.displayName
+        )
+
+        let savedUser = try await repository.create(user)
+        return try UserDTO(user: savedUser)
+    }
 }

@@ -55,6 +55,14 @@ struct SceneSyncHandler: SyncHandler {
             try await scene.save(on: database)
         }
 
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .scene,
+            entityID: change.id,
+            operation: change.operation
+        )
+
         return nil
     }
 
@@ -73,6 +81,14 @@ struct SceneSyncHandler: SyncHandler {
         scene.deletedAt = change.updatedAt
         scene.updatedAt = change.updatedAt
         try await scene.update(on: database)
+
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .scene,
+            entityID: change.id,
+            operation: change.operation
+        )
 
         return nil
     }

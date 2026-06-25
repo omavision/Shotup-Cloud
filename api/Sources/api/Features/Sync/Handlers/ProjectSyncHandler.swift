@@ -50,6 +50,14 @@ struct ProjectSyncHandler: SyncHandler {
             try await project.save(on: database)
         }
 
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .project,
+            entityID: change.id,
+            operation: change.operation
+        )
+
         return nil
     }
 
@@ -68,6 +76,14 @@ struct ProjectSyncHandler: SyncHandler {
         project.deletedAt = change.updatedAt
         project.updatedAt = change.updatedAt
         try await project.update(on: database)
+
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .project,
+            entityID: change.id,
+            operation: change.operation
+        )
 
         return nil
     }

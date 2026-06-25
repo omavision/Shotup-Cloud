@@ -58,6 +58,14 @@ struct ShotSyncHandler: SyncHandler {
             try await shot.save(on: database)
         }
 
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .shot,
+            entityID: change.id,
+            operation: change.operation
+        )
+
         return nil
     }
 
@@ -74,6 +82,14 @@ struct ShotSyncHandler: SyncHandler {
         shot.deletedAt = change.updatedAt
         shot.updatedAt = change.updatedAt
         try await shot.update(on: database)
+
+        let recorder = SyncEventRecorder(database: database)
+        _ = try await recorder.record(
+            userID: user.id,
+            entity: .shot,
+            entityID: change.id,
+            operation: change.operation
+        )
 
         return nil
     }

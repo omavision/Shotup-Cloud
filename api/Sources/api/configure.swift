@@ -1,7 +1,9 @@
+import Foundation
 import NIOSSL
 import Fluent
 import FluentPostgresDriver
 import Vapor
+import JWT
 
 /// Configures your application.
 func configure(_ app: Application) async throws {
@@ -24,6 +26,14 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateProject())
     app.migrations.add(CreateScene())
     app.migrations.add(CreateShot())
+
+   // JWT
+let jwtSecret = Environment.get("JWT_SECRET") ?? "development-secret"
+
+await app.jwt.keys.add(
+    hmac: HMACKey(from: Data(jwtSecret.utf8)),
+    digestAlgorithm: .sha256
+)
 
     // Routes
     try routes(app)

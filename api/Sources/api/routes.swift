@@ -14,4 +14,7 @@ func routes(_ app: Application) throws {
 
     let scenes = v1.grouped("scenes")
     try scenes.register(collection: SceneController())
+
+    let auth = v1.grouped("auth")
+    try auth.register(collection: AuthController())
 }

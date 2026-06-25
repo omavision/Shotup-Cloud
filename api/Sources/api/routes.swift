@@ -22,4 +22,7 @@ func routes(_ app: Application) throws {
 
     let projectScenes = protected.grouped("projects", ":projectID", "scenes")
     try projectScenes.register(collection: SceneController())
+
+    let sync = protected.grouped("sync")
+    try sync.register(collection: SyncController())
 }

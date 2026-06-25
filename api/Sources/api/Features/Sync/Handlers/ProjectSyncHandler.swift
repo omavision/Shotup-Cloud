@@ -25,8 +25,9 @@ struct ProjectSyncHandler: SyncHandler {
         change: SyncChange,
         user: AuthenticatedUser
     ) async throws -> SyncConflict? {
-        let title = change.payload?["title"] ?? "Untitled Project"
-        let notes = change.payload?["notes"]
+        let payload = try change.decodePayload(ProjectPayload.self)
+        let title = payload.title
+        let notes = payload.notes
 
         if let existing = try await Project.query(on: database)
             .filter(\.$id == change.id)

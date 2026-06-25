@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: shotup-cloud-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shotup_cloud_dev
+      POSTGRES_USER: shotup
+      POSTGRES_PASSWORD: shotup_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - shotup_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  shotup_postgres_data:

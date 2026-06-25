@@ -1,5 +1,9 @@
 import Vapor
 
 func routes(_ app: Application) throws {
-    try app.register(collection: HealthController())
+
+    let api = app.grouped("api")
+    let v1 = api.grouped("v1")
+
+    try v1.register(collection: HealthController())
 }

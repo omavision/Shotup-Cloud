@@ -8,4 +8,7 @@ func routes(_ app: Application) throws {
 
     let users = v1.grouped("users")
     try users.register(collection: UserController())
+
+    let projects = v1.grouped("projects")
+    try projects.register(collection: ProjectController())
 }

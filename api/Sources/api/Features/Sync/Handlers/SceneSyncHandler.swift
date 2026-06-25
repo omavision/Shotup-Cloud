@@ -36,6 +36,14 @@ struct SceneSyncHandler: SyncHandler {
             .filter(\.$id == change.id)
             .filter(\.$project.$id == projectID)
             .first() {
+            guard existing.updatedAt <= change.updatedAt else {
+                return SyncConflict(
+                    entity: .scene,
+                    id: change.id,
+                    reason: "Server version is newer"
+                )
+            }
+
             existing.title = payload.title
             existing.notes = payload.notes
             existing.sortOrder = payload.sortOrderInt

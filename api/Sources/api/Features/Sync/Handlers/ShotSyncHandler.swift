@@ -33,6 +33,14 @@ struct ShotSyncHandler: SyncHandler {
             .filter(\.$id == change.id)
             .filter(\.$scene.$id == sceneID)
             .first() {
+            guard existing.updatedAt <= change.updatedAt else {
+                return SyncConflict(
+                    entity: .shot,
+                    id: change.id,
+                    reason: "Server version is newer"
+                )
+            }
+
             existing.title = payload.title
             existing.notes = payload.notes
             existing.shotSize = payload.shotSize

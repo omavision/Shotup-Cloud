@@ -33,6 +33,14 @@ struct ProjectSyncHandler: SyncHandler {
             .filter(\.$id == change.id)
             .filter(\.$user.$id == user.id)
             .first() {
+            guard existing.updatedAt <= change.updatedAt else {
+                return SyncConflict(
+                    entity: .project,
+                    id: change.id,
+                    reason: "Server version is newer"
+                )
+            }
+
             existing.title = title
             existing.notes = notes
             existing.updatedAt = change.updatedAt

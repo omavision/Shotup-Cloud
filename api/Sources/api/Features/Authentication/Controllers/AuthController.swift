@@ -27,12 +27,16 @@ struct AuthController: RouteCollection {
             )
         }
 
-        let token = try await JWTService(application: req.application)
+        let accessToken = try await JWTService(application: req.application)
             .signAccessToken(for: user)
+
+        let refreshToken = try await RefreshTokenService(database: req.db)
+            .createRefreshToken(for: user, deviceName: "Development Device")
 
         return APIResponse(
             data: AuthResponse(
-                accessToken: token,
+                accessToken: accessToken,
+                refreshToken: refreshToken,
                 tokenType: "Bearer",
                 expiresIn: 3600,
                 user: try UserDTO(user: user)

@@ -26,6 +26,7 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateProject())
     app.migrations.add(CreateScene())
     app.migrations.add(CreateShot())
+    app.migrations.add(CreateRefreshToken())
 
    // JWT
 let jwtSecret = Environment.get("JWT_SECRET") ?? "development-secret"

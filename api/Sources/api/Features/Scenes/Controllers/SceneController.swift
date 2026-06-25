@@ -9,26 +9,49 @@ struct SceneController: RouteCollection {
 
     @Sendable
     func listScenes(req: Request) async throws -> APIResponse<[SceneDTO]> {
-        guard let projectIDString = req.query[String.self, at: "projectID"],
+        let auth = try req.auth.require(AuthenticatedUser.self)
+
+        guard let projectIDString = req.parameters.get("projectID"),
               let projectID = UUID(uuidString: projectIDString) else {
             throw Abort(.badRequest, reason: "Missing or invalid projectID")
         }
 
-        let repository = SceneRepository(database: req.db)
-        let service = SceneService(repository: repository)
+        let projectRepository = ProjectRepository(database: req.db)
+        let projectService = ProjectService(repository: projectRepository)
+        _ = try await projectService.requireOwnedProject(id: projectID, userID: auth.id)
 
-        let scenes = try await service.listScenes(for: projectID)
+        let sceneRepository = SceneRepository(database: req.db)
+        let sceneService = SceneService(repository: sceneRepository)
+
+        let scenes = try await sceneService.listScenes(for: projectID)
         return APIResponse(data: scenes)
     }
 
     @Sendable
     func createScene(req: Request) async throws -> APIResponse<SceneDTO> {
+        let auth = try req.auth.require(AuthenticatedUser.self)
+
+        guard let projectIDString = req.parameters.get("projectID"),
+              let projectID = UUID(uuidString: projectIDString) else {
+            throw Abort(.badRequest, reason: "Missing or invalid projectID")
+        }
+
         let request = try req.content.decode(CreateSceneRequest.self)
 
-        let repository = SceneRepository(database: req.db)
-        let service = SceneService(repository: repository)
+        let projectRepository = ProjectRepository(database: req.db)
+        let projectService = ProjectService(repository: projectRepository)
+        _ = try await projectService.requireOwnedProject(id: projectID, userID: auth.id)
 
-        let scene = try await service.createScene(from: request)
+        let sceneRepository = SceneRepository(database: req.db)
+        let sceneService = SceneService(repository: sceneRepository)
+
+        let scene = try await sceneService.createScene(
+            projectID: projectID,
+            title: request.title,
+            notes: request.notes,
+            sortOrder: request.sortOrder ?? 0
+        )
+
         return APIResponse(data: scene)
     }
 }

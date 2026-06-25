@@ -20,6 +20,6 @@ func routes(_ app: Application) throws {
     let projects = protected.grouped("projects")
     try projects.register(collection: ProjectController())
 
-    let scenes = protected.grouped("scenes")
-    try scenes.register(collection: SceneController())
+    let projectScenes = protected.grouped("projects", ":projectID", "scenes")
+    try projectScenes.register(collection: SceneController())
 }

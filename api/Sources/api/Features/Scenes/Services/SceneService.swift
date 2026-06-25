@@ -8,12 +8,17 @@ struct SceneService {
         return try scenes.map { try SceneDTO(scene: $0) }
     }
 
-    func createScene(from request: CreateSceneRequest) async throws -> SceneDTO {
+    func createScene(
+        projectID: UUID,
+        title: String,
+        notes: String?,
+        sortOrder: Int
+    ) async throws -> SceneDTO {
         let scene = Scene(
-            projectID: request.projectID,
-            title: request.title,
-            notes: request.notes,
-            sortOrder: request.sortOrder ?? 0
+            projectID: projectID,
+            title: title,
+            notes: notes,
+            sortOrder: sortOrder
         )
 
         let savedScene = try await repository.create(scene)

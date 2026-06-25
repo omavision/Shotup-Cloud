@@ -3,22 +3,25 @@ import Fluent
 import FluentPostgresDriver
 import Vapor
 
-/// configures your application
+/// Configures your application.
 func configure(_ app: Application) async throws {
-    // uncomment to serve files from /Public folder
+    // Uncomment to serve files from /Public folder.
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     app.databases.use(.postgres(
-    configuration: .init(
-        hostname: Environment.get("DATABASE_HOST") ?? "localhost",
-        port: Environment.get("DATABASE_PORT").flatMap(Int.init(_:)) ?? 5432,
-        username: Environment.get("DATABASE_USERNAME") ?? "shotup",
-        password: Environment.get("DATABASE_PASSWORD") ?? "shotup_dev_password",
-        database: Environment.get("DATABASE_NAME") ?? "shotup_cloud_dev",
-        tls: .prefer(try .init(configuration: .clientDefault))
-    )
-), as: .psql)
+        configuration: .init(
+            hostname: Environment.get("DATABASE_HOST") ?? "localhost",
+            port: Environment.get("DATABASE_PORT").flatMap(Int.init(_:)) ?? 5432,
+            username: Environment.get("DATABASE_USERNAME") ?? "shotup",
+            password: Environment.get("DATABASE_PASSWORD") ?? "shotup_dev_password",
+            database: Environment.get("DATABASE_NAME") ?? "shotup_cloud_dev",
+            tls: .prefer(try .init(configuration: .clientDefault))
+        )
+    ), as: .psql)
 
-    // register routes
+    // Migrations
+    app.migrations.add(CreateUser())
+
+    // Routes
     try routes(app)
 }

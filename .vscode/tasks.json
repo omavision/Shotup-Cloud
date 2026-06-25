@@ -1,0 +1,50 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "swift build",
+            "type": "shell",
+            "command": "swift",
+            "args": [
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/api"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "swift test",
+            "type": "shell",
+            "command": "swift",
+            "args": [
+                "test"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/api"
+            },
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "swift run api serve",
+            "type": "shell",
+            "command": "swift",
+            "args": [
+                "run",
+                "api",
+                "serve"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/api"
+            },
+            "group": "none",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        }
+    ]
+}

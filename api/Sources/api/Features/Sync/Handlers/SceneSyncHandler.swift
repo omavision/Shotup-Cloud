@@ -38,7 +38,7 @@ struct SceneSyncHandler: SyncHandler {
             .first() {
             existing.title = payload.title
             existing.notes = payload.notes
-            existing.sortOrder = payload.sortOrder
+            existing.sortOrder = payload.sortOrderInt
             existing.updatedAt = change.updatedAt
             try await existing.update(on: database)
         } else {
@@ -47,7 +47,7 @@ struct SceneSyncHandler: SyncHandler {
                 projectID: projectID,
                 title: payload.title,
                 notes: payload.notes,
-                sortOrder: payload.sortOrder,
+                sortOrder: payload.sortOrderInt,
                 createdAt: change.updatedAt,
                 updatedAt: change.updatedAt
             )

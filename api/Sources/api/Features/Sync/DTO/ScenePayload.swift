@@ -4,5 +4,9 @@ struct ScenePayload: Content {
     let projectID: UUID
     let title: String
     let notes: String?
-    let sortOrder: Int
+    let sortOrder: String
+
+    var sortOrderInt: Int {
+        Int(sortOrder) ?? 0
+    }
 }

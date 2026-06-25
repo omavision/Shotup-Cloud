@@ -11,4 +11,7 @@ func routes(_ app: Application) throws {
 
     let projects = v1.grouped("projects")
     try projects.register(collection: ProjectController())
+
+    let scenes = v1.grouped("scenes")
+    try scenes.register(collection: SceneController())
 }

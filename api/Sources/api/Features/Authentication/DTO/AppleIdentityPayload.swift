@@ -15,4 +15,8 @@ struct AppleIdentityPayload: JWTPayload {
             throw Abort(.unauthorized, reason: "Invalid Apple token issuer")
         }
     }
+
+    func verifyAudience(_ bundleID: String) throws {
+        try audience.verifyIntendedAudience(includes: bundleID)
+    }
 }

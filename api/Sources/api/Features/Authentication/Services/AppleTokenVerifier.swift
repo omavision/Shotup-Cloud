@@ -15,10 +15,15 @@ struct AppleTokenVerifier {
         let keys = JWTKeyCollection()
         try await keys.add(jwks: jwks)
 
-        return try await keys.verify(
+        let payload = try await keys.verify(
             identityToken,
             as: AppleIdentityPayload.self
         )
+
+        let bundleID = Environment.get("APPLE_BUNDLE_ID") ?? ""
+        try payload.verifyAudience(bundleID)
+
+        return payload
     }
 
     private func fetchAppleJWKS() async throws -> JWKS {

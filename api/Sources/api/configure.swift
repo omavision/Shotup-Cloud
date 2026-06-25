@@ -23,6 +23,7 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateUser())
     app.migrations.add(CreateProject())
     app.migrations.add(CreateScene())
+    app.migrations.add(CreateShot())
 
     // Routes
     try routes(app)

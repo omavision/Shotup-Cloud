@@ -1,4 +1,4 @@
-import Foundation
+import JWT
 import Vapor
 
 struct AppleTokenVerifier {
@@ -8,18 +8,24 @@ struct AppleTokenVerifier {
         let header = try decodeHeader(from: identityToken)
         let jwks = try await fetchAppleJWKS()
 
-        guard jwks.keys.contains(where: { $0.kid == header.kid }) else {
+        guard jwks.find(identifier: header.kid, type: .rsa) != nil else {
             throw Abort(.unauthorized, reason: "Matching Apple public key not found")
         }
 
-        throw Abort(.notImplemented, reason: "Apple key selected. Signature verification not implemented yet.")
+        let keys = JWTKeyCollection()
+        try await keys.add(jwks: jwks)
+
+        return try await keys.verify(
+            identityToken,
+            as: AppleIdentityPayload.self
+        )
     }
 
-    private func fetchAppleJWKS() async throws -> AppleJWKSResponse {
+    private func fetchAppleJWKS() async throws -> JWKS {
         try await application.client
             .get("https://appleid.apple.com/auth/keys")
             .content
-            .decode(AppleJWKSResponse.self)
+            .decode(JWKS.self)
     }
 
     private func decodeHeader(from token: String) throws -> JWTHeader {

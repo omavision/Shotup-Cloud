@@ -239,6 +239,64 @@ final class SyncIntegrationTests: XCTestCase {
         }
     }
 
+    func testSceneUpsertAppliesAndClearsDeletedAtPayload() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+            _ = try await sync(app, token: token, changes: [projectUpsert()])
+
+            let deleted = try await sync(
+                app,
+                token: token,
+                changes: [
+                    sceneUpsert(
+                        title: "Deleted Scene Through Upsert",
+                        notes: "iOS soft delete payload",
+                        sortOrder: "2",
+                        updatedAt: "2026-06-27T21:10:40Z",
+                        deletedAt: "2026-06-27T21:10:40Z"
+                    )
+                ]
+            )
+
+            XCTAssertTrue(deleted.conflicts.isEmpty)
+
+            let softDeletedScene = try await Scene.find(sceneID, on: app.db)
+            XCTAssertEqual(softDeletedScene?.title, "Deleted Scene Through Upsert")
+            XCTAssertEqual(softDeletedScene?.notes, "iOS soft delete payload")
+            XCTAssertEqual(softDeletedScene?.sortOrder, 2)
+            XCTAssertNotNil(softDeletedScene?.deletedAt)
+
+            let deleteEvents = try await SyncEvent.query(on: app.db)
+                .filter(\.$entity == SyncEntity.scene.rawValue)
+                .filter(\.$entityID == sceneID)
+                .filter(\.$operation == SyncOperation.delete.rawValue)
+                .all()
+            XCTAssertTrue(deleteEvents.isEmpty)
+
+            let cleared = try await sync(
+                app,
+                token: token,
+                changes: [
+                    sceneUpsert(
+                        title: "Restored Scene Through Upsert",
+                        notes: "Empty deletedAt clears soft delete",
+                        sortOrder: "3",
+                        updatedAt: "2026-06-27T21:11:40Z",
+                        deletedAt: ""
+                    )
+                ]
+            )
+
+            XCTAssertTrue(cleared.conflicts.isEmpty)
+
+            let restoredScene = try await Scene.find(sceneID, on: app.db)
+            XCTAssertEqual(restoredScene?.title, "Restored Scene Through Upsert")
+            XCTAssertEqual(restoredScene?.notes, "Empty deletedAt clears soft delete")
+            XCTAssertEqual(restoredScene?.sortOrder, 3)
+            XCTAssertNil(restoredScene?.deletedAt)
+        }
+    }
+
     @discardableResult
     private func seedProjectSceneShot(
         _ app: Application,
@@ -332,19 +390,29 @@ final class SyncIntegrationTests: XCTestCase {
     }
 
     private func sceneUpsert(
-        updatedAt: String = "2026-06-25T16:00:00Z"
+        title: String = "Opening Scene",
+        notes: String = "Opening sequence",
+        sortOrder: String = "1",
+        updatedAt: String = "2026-06-25T16:00:00Z",
+        deletedAt: String? = nil
     ) -> TestSyncChange {
-        TestSyncChange(
+        var payload = [
+            "projectID": projectID.uuidString,
+            "title": title,
+            "notes": notes,
+            "sortOrder": sortOrder
+        ]
+
+        if let deletedAt {
+            payload["deletedAt"] = deletedAt
+        }
+
+        return TestSyncChange(
             entity: .scene,
             operation: .upsert,
             id: sceneID,
             updatedAt: updatedAt,
-            payload: [
-                "projectID": projectID.uuidString,
-                "title": "Opening Scene",
-                "notes": "Opening sequence",
-                "sortOrder": "1"
-            ]
+            payload: payload
         )
     }
 

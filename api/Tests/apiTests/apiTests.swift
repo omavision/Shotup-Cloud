@@ -186,6 +186,59 @@ final class SyncIntegrationTests: XCTestCase {
         }
     }
 
+    func testProjectUpsertAppliesAndClearsDeletedAtPayload() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+
+            let deleted = try await sync(
+                app,
+                token: token,
+                changes: [
+                    projectUpsert(
+                        title: "Deleted Through Upsert",
+                        notes: "iOS soft delete payload",
+                        updatedAt: "2026-06-27T21:00:40Z",
+                        deletedAt: "2026-06-27T21:00:40Z"
+                    )
+                ]
+            )
+
+            XCTAssertTrue(deleted.conflicts.isEmpty)
+
+            let softDeletedProject = try await Project.find(projectID, on: app.db)
+            XCTAssertEqual(softDeletedProject?.title, "Deleted Through Upsert")
+            XCTAssertEqual(softDeletedProject?.notes, "iOS soft delete payload")
+            XCTAssertNotNil(softDeletedProject?.deletedAt)
+
+            let deleteEvents = try await SyncEvent.query(on: app.db)
+                .filter(\.$entity == SyncEntity.project.rawValue)
+                .filter(\.$entityID == projectID)
+                .filter(\.$operation == SyncOperation.delete.rawValue)
+                .all()
+            XCTAssertTrue(deleteEvents.isEmpty)
+
+            let cleared = try await sync(
+                app,
+                token: token,
+                changes: [
+                    projectUpsert(
+                        title: "Restored Through Upsert",
+                        notes: "Empty deletedAt clears soft delete",
+                        updatedAt: "2026-06-27T21:01:40Z",
+                        deletedAt: ""
+                    )
+                ]
+            )
+
+            XCTAssertTrue(cleared.conflicts.isEmpty)
+
+            let restoredProject = try await Project.find(projectID, on: app.db)
+            XCTAssertEqual(restoredProject?.title, "Restored Through Upsert")
+            XCTAssertEqual(restoredProject?.notes, "Empty deletedAt clears soft delete")
+            XCTAssertNil(restoredProject?.deletedAt)
+        }
+    }
+
     @discardableResult
     private func seedProjectSceneShot(
         _ app: Application,
@@ -257,17 +310,24 @@ final class SyncIntegrationTests: XCTestCase {
     private func projectUpsert(
         title: String = "Synced Project",
         notes: String = "Created through sync engine",
-        updatedAt: String = "2026-06-25T15:00:00Z"
+        updatedAt: String = "2026-06-25T15:00:00Z",
+        deletedAt: String? = nil
     ) -> TestSyncChange {
-        TestSyncChange(
+        var payload = [
+            "title": title,
+            "notes": notes
+        ]
+
+        if let deletedAt {
+            payload["deletedAt"] = deletedAt
+        }
+
+        return TestSyncChange(
             entity: .project,
             operation: .upsert,
             id: projectID,
             updatedAt: updatedAt,
-            payload: [
-                "title": title,
-                "notes": notes
-            ]
+            payload: payload
         )
     }
 

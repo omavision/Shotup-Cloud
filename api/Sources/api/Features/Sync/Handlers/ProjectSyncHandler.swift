@@ -1,4 +1,5 @@
 import Fluent
+import Foundation
 import Vapor
 
 struct ProjectSyncHandler: SyncHandler {
@@ -28,6 +29,7 @@ struct ProjectSyncHandler: SyncHandler {
         let payload = try change.decodePayload(ProjectPayload.self)
         let title = payload.title
         let notes = payload.notes
+        let deletedAt = try parseDeletedAt(payload.deletedAt)
 
         if let existing = try await Project.query(on: database)
             .filter(\.$id == change.id)
@@ -43,6 +45,7 @@ struct ProjectSyncHandler: SyncHandler {
 
             existing.title = title
             existing.notes = notes
+            existing.deletedAt = deletedAt
             existing.updatedAt = change.updatedAt
             try await existing.update(on: database)
         } else {
@@ -52,7 +55,8 @@ struct ProjectSyncHandler: SyncHandler {
                 title: title,
                 notes: notes,
                 createdAt: change.updatedAt,
-                updatedAt: change.updatedAt
+                updatedAt: change.updatedAt,
+                deletedAt: deletedAt
             )
 
             try await project.save(on: database)
@@ -67,6 +71,29 @@ struct ProjectSyncHandler: SyncHandler {
         )
 
         return nil
+    }
+
+    private func parseDeletedAt(_ value: String?) throws -> Date? {
+        guard let value else {
+            return nil
+        }
+
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else {
+            return nil
+        }
+
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: trimmedValue) {
+            return date
+        }
+
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        if let date = formatter.date(from: trimmedValue) {
+            return date
+        }
+
+        throw Abort(.badRequest, reason: "Invalid project deletedAt")
     }
 
     private func delete(

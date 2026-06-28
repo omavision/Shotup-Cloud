@@ -8,6 +8,7 @@ struct ShotPayload: Content {
     let cameraMovement: String?
     let lensMM: String?
     let sortOrder: String
+    let deletedAt: String?
 
     var lensMMDouble: Double? {
         guard let lensMM else {

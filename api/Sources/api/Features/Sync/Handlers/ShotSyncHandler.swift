@@ -1,4 +1,5 @@
 import Fluent
+import Foundation
 import Vapor
 
 struct ShotSyncHandler: SyncHandler {
@@ -27,6 +28,7 @@ struct ShotSyncHandler: SyncHandler {
     ) async throws -> SyncConflict? {
         let payload = try change.decodePayload(ShotPayload.self)
         let sceneID = payload.sceneID
+        let deletedAt = try parseDeletedAt(payload.deletedAt)
         _ = try await requireOwnedScene(id: sceneID, user: user)
 
         if let existing = try await Shot.query(on: database)
@@ -47,6 +49,7 @@ struct ShotSyncHandler: SyncHandler {
             existing.cameraMovement = payload.cameraMovement
             existing.lensMM = payload.lensMMDouble
             existing.sortOrder = payload.sortOrderInt
+            existing.deletedAt = deletedAt
             existing.updatedAt = change.updatedAt
             try await existing.update(on: database)
         } else {
@@ -60,7 +63,8 @@ struct ShotSyncHandler: SyncHandler {
                 lensMM: payload.lensMMDouble,
                 sortOrder: payload.sortOrderInt,
                 createdAt: change.updatedAt,
-                updatedAt: change.updatedAt
+                updatedAt: change.updatedAt,
+                deletedAt: deletedAt
             )
 
             try await shot.save(on: database)
@@ -75,6 +79,29 @@ struct ShotSyncHandler: SyncHandler {
         )
 
         return nil
+    }
+
+    private func parseDeletedAt(_ value: String?) throws -> Date? {
+        guard let value else {
+            return nil
+        }
+
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedValue.isEmpty else {
+            return nil
+        }
+
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: trimmedValue) {
+            return date
+        }
+
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        if let date = formatter.date(from: trimmedValue) {
+            return date
+        }
+
+        throw Abort(.badRequest, reason: "Invalid shot deletedAt")
     }
 
     private func delete(

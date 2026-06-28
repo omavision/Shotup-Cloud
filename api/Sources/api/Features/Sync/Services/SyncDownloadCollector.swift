@@ -1,3 +1,4 @@
+import Foundation
 import Fluent
 import Vapor
 
@@ -86,7 +87,8 @@ struct SyncDownloadCollector {
                     "shotSize": shot.shotSize ?? "",
                     "cameraMovement": shot.cameraMovement ?? "",
                     "lensMM": shot.lensMM.map { "\($0)" } ?? "",
-                    "sortOrder": "\(shot.sortOrder)"
+                    "sortOrder": "\(shot.sortOrder)",
+                    "deletedAt": shot.deletedAt?.iso8601 ?? ""
                 ]
             )
         }
@@ -169,7 +171,6 @@ struct SyncDownloadCollector {
                 .join(Project.self, on: \Scene.$project.$id == \Project.$id)
                 .filter(\.$id == event.entityID)
                 .filter(Project.self, \.$user.$id == user.id)
-                .filter(\.$deletedAt == nil)
                 .first()
             else {
                 return nil
@@ -237,8 +238,15 @@ struct SyncDownloadCollector {
                 "shotSize": shot.shotSize ?? "",
                 "cameraMovement": shot.cameraMovement ?? "",
                 "lensMM": shot.lensMM.map { "\($0)" } ?? "",
-                "sortOrder": "\(shot.sortOrder)"
+                "sortOrder": "\(shot.sortOrder)",
+                "deletedAt": shot.deletedAt?.iso8601 ?? ""
             ]
         )
+    }
+}
+
+private extension Date {
+    var iso8601: String {
+        ISO8601DateFormatter().string(from: self)
     }
 }

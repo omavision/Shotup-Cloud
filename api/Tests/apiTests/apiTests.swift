@@ -297,6 +297,87 @@ final class SyncIntegrationTests: XCTestCase {
         }
     }
 
+    func testShotUpsertAppliesAndClearsDeletedAtPayload() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+            _ = try await sync(app, token: token, changes: [projectUpsert()])
+            _ = try await sync(app, token: token, changes: [sceneUpsert()])
+
+            let deleted = try await sync(
+                app,
+                token: token,
+                changes: [
+                    shotUpsert(
+                        title: "Deleted Shot Through Upsert",
+                        notes: "iOS soft delete payload",
+                        shotSize: "Close",
+                        cameraMovement: "Pan",
+                        lensMM: "85",
+                        sortOrder: "2",
+                        updatedAt: "2026-06-28T00:16:38Z",
+                        deletedAt: "2026-06-28T00:16:38Z"
+                    )
+                ]
+            )
+
+            XCTAssertTrue(deleted.conflicts.isEmpty)
+
+            let softDeletedShot = try await Shot.find(shotID, on: app.db)
+            XCTAssertEqual(softDeletedShot?.title, "Deleted Shot Through Upsert")
+            XCTAssertEqual(softDeletedShot?.notes, "iOS soft delete payload")
+            XCTAssertEqual(softDeletedShot?.shotSize, "Close")
+            XCTAssertEqual(softDeletedShot?.cameraMovement, "Pan")
+            XCTAssertEqual(softDeletedShot?.lensMM, 85)
+            XCTAssertEqual(softDeletedShot?.sortOrder, 2)
+            XCTAssertNotNil(softDeletedShot?.deletedAt)
+
+            let deleteEvents = try await SyncEvent.query(on: app.db)
+                .filter(\.$entity == SyncEntity.shot.rawValue)
+                .filter(\.$entityID == shotID)
+                .filter(\.$operation == SyncOperation.delete.rawValue)
+                .all()
+            XCTAssertTrue(deleteEvents.isEmpty)
+
+            let download = try await sync(
+                app,
+                token: token,
+                lastSyncToken: "2",
+                changes: []
+            )
+
+            let downloadedShot = try XCTUnwrap(download.changes.first { $0.entity == .shot && $0.id == shotID })
+            XCTAssertEqual(downloadedShot.payload?["deletedAt"], "2026-06-28T00:16:38Z")
+
+            let cleared = try await sync(
+                app,
+                token: token,
+                changes: [
+                    shotUpsert(
+                        title: "Restored Shot Through Upsert",
+                        notes: "Empty deletedAt clears soft delete",
+                        shotSize: "Wide",
+                        cameraMovement: "Static",
+                        lensMM: "35",
+                        sortOrder: "3",
+                        updatedAt: "2026-06-28T00:17:38Z",
+                        deletedAt: "   "
+                    )
+                ]
+            )
+
+            XCTAssertTrue(cleared.conflicts.isEmpty)
+
+            let restoredShot = try await Shot.find(shotID, on: app.db)
+            XCTAssertEqual(restoredShot?.title, "Restored Shot Through Upsert")
+            XCTAssertEqual(restoredShot?.notes, "Empty deletedAt clears soft delete")
+            XCTAssertEqual(restoredShot?.shotSize, "Wide")
+            XCTAssertEqual(restoredShot?.cameraMovement, "Static")
+            XCTAssertEqual(restoredShot?.lensMM, 35)
+            XCTAssertEqual(restoredShot?.sortOrder, 3)
+            XCTAssertNil(restoredShot?.deletedAt)
+        }
+    }
+
     @discardableResult
     private func seedProjectSceneShot(
         _ app: Application,
@@ -424,22 +505,29 @@ final class SyncIntegrationTests: XCTestCase {
         cameraMovement: String = "Static",
         lensMM: String = "35",
         sortOrder: String = "1",
-        updatedAt: String = "2026-06-25T17:00:00Z"
+        updatedAt: String = "2026-06-25T17:00:00Z",
+        deletedAt: String? = nil
     ) -> TestSyncChange {
-        TestSyncChange(
+        var payload = [
+            "sceneID": sceneID.uuidString,
+            "title": title,
+            "notes": notes,
+            "shotSize": shotSize,
+            "cameraMovement": cameraMovement,
+            "lensMM": lensMM,
+            "sortOrder": sortOrder
+        ]
+
+        if let deletedAt {
+            payload["deletedAt"] = deletedAt
+        }
+
+        return TestSyncChange(
             entity: .shot,
             operation: .upsert,
             id: id ?? shotID,
             updatedAt: updatedAt,
-            payload: [
-                "sceneID": sceneID.uuidString,
-                "title": title,
-                "notes": notes,
-                "shotSize": shotSize,
-                "cameraMovement": cameraMovement,
-                "lensMM": lensMM,
-                "sortOrder": sortOrder
-            ]
+            payload: payload
         )
     }
 }

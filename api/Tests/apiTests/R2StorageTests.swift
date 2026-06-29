@@ -7,6 +7,7 @@ final class R2StorageTests: XCTestCase {
     private let projectID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
     private let sceneID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
     private let frameID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
+    private let fixedDate = Date(timeIntervalSince1970: 1_798_761_600)
 
     func testR2ConfigurationLoadsRequiredEnvironmentValues() throws {
         let values = environment(bucket: R2Configuration.devBucket)
@@ -63,21 +64,101 @@ final class R2StorageTests: XCTestCase {
         )
     }
 
-    func testPresignedMethodsAreExplicitlyUnsupported() async throws {
+    func testPresignedUploadURLGeneration() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let fixedDate = fixedDate
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] },
+            now: { fixedDate }
+        )
+
+        let upload = try await service.presignedUploadURL(
+            userID: userID,
+            projectID: projectID,
+            sceneID: sceneID,
+            frameID: frameID,
+            contentType: "image/jpeg"
+        )
+
+        XCTAssertEqual(
+            upload.objectKey,
+            "users/11111111-1111-1111-1111-111111111111/projects/22222222-2222-2222-2222-222222222222/scenes/33333333-3333-3333-3333-333333333333/frames/44444444-4444-4444-4444-444444444444/original.jpg"
+        )
+        XCTAssertEqual(upload.expiresAt, fixedDate.addingTimeInterval(900))
+        XCTAssertEqual(upload.requiredHeaders, ["Content-Type": "image/jpeg"])
+
+        let components = try XCTUnwrap(URLComponents(string: upload.uploadURL))
+        XCTAssertEqual(components.scheme, "https")
+        XCTAssertEqual(components.host, "test-account.r2.cloudflarestorage.com")
+        XCTAssertEqual(
+            components.path,
+            "/shotup-media-dev/users/11111111-1111-1111-1111-111111111111/projects/22222222-2222-2222-2222-222222222222/scenes/33333333-3333-3333-3333-333333333333/frames/44444444-4444-4444-4444-444444444444/original.jpg"
+        )
+
+        let query = Dictionary(
+            uniqueKeysWithValues: try XCTUnwrap(components.queryItems).map {
+                ($0.name, try XCTUnwrap($0.value))
+            }
+        )
+
+        XCTAssertEqual(query["X-Amz-Algorithm"], "AWS4-HMAC-SHA256")
+        XCTAssertEqual(query["X-Amz-Credential"], "test-access-key/20270101/auto/s3/aws4_request")
+        XCTAssertEqual(query["X-Amz-Date"], "20270101T000000Z")
+        XCTAssertEqual(query["X-Amz-Expires"], "900")
+        XCTAssertEqual(query["X-Amz-SignedHeaders"], "content-type;host")
+        XCTAssertNotNil(query["X-Amz-Signature"])
+        XCTAssertEqual(query["X-Amz-Signature"]?.count, 64)
+    }
+
+    func testPresignedUploadRejectsUnsupportedContentType() async throws {
         let values = environment(bucket: R2Configuration.devBucket)
         let service = R2StorageService(
             configuration: try R2Configuration.load { values[$0] }
         )
 
         do {
-            _ = try await service.presignedUploadURL(objectKey: "test.jpg", expiresIn: 300)
-            XCTFail("Expected presignedUploadURL to be unsupported.")
-        } catch let error as R2StorageError {
-            XCTAssertEqual(
-                error,
-                .unsupported("R2 presigned upload URLs are not implemented yet.")
+            _ = try await service.presignedUploadURL(
+                userID: userID,
+                projectID: projectID,
+                sceneID: sceneID,
+                frameID: frameID,
+                contentType: "image/png"
             )
+            XCTFail("Expected image/png to be rejected.")
+        } catch let error as R2StorageError {
+            XCTAssertEqual(error, .unsupportedContentType("image/png"))
         }
+    }
+
+    func testPresignedUploadRejectsInvalidEndpointConfiguration() async throws {
+        let config = R2Configuration(
+            accountID: "test-account",
+            accessKeyID: "test-access-key",
+            secretAccessKey: "test-secret-key",
+            bucket: R2Configuration.devBucket,
+            endpoint: "not a url"
+        )
+        let service = R2StorageService(configuration: config)
+
+        do {
+            _ = try await service.presignedUploadURL(
+                userID: userID,
+                projectID: projectID,
+                sceneID: sceneID,
+                frameID: frameID,
+                contentType: "image/jpeg"
+            )
+            XCTFail("Expected invalid endpoint to be rejected.")
+        } catch let error as R2StorageError {
+            XCTAssertEqual(error, .invalidEndpoint("not a url"))
+        }
+    }
+
+    func testNonUploadMethodsAreExplicitlyUnsupported() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] }
+        )
 
         do {
             _ = try await service.presignedDownloadURL(objectKey: "test.jpg", expiresIn: 300)

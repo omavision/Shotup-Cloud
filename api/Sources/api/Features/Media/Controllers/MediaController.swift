@@ -15,7 +15,8 @@ struct MediaController: RouteCollection {
             throw Abort(.internalServerError, reason: "Storage service unavailable")
         }
 
-        let service = MediaService(database: req.db, storage: storage)
+        let repository = FluentMediaRepository(database: req.db)
+        let service = MediaService(database: req.db, storage: storage, repository: repository)
         let response = try await service.requestUpload(userID: auth.id, payload: payload)
 
         return APIResponse(data: response)

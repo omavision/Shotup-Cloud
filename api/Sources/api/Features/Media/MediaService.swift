@@ -4,6 +4,7 @@ import Vapor
 struct MediaService {
     let database: any Database
     let storage: any R2StorageServicing
+    let repository: any MediaRepository
 
     func requestUpload(
         userID: UUID,

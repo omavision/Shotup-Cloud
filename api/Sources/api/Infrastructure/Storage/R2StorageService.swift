@@ -33,12 +33,15 @@ struct R2StorageService: R2StorageServicing {
 
     let configuration: R2Configuration
     private let now: @Sendable () -> Date
+    private let client: (any Client)?
 
     init(
         configuration: R2Configuration,
+        client: (any Client)? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.configuration = configuration
+        self.client = client
         self.now = now
     }
 
@@ -143,7 +146,71 @@ struct R2StorageService: R2StorageServicing {
     }
 
     func objectExists(objectKey: String) async throws -> Bool {
-        throw R2StorageError.unsupported("R2 object existence checks are not implemented yet.")
+        guard let client else {
+            throw R2StorageError.unsupported("R2 client is not configured.")
+        }
+
+        guard var components = URLComponents(string: configuration.endpoint),
+              components.scheme == "https" || components.scheme == "http",
+              let host = components.host,
+              !host.isEmpty
+        else {
+            throw R2StorageError.invalidEndpoint(configuration.endpoint)
+        }
+
+        let requestDate = now()
+        let dateStamp = Self.dateStampFormatter.string(from: requestDate)
+        let amzDate = Self.amzDateFormatter.string(from: requestDate)
+        let credentialScope = "\(dateStamp)/auto/s3/aws4_request"
+        let credential = "\(configuration.accessKeyID)/\(credentialScope)"
+        let canonicalURI = "/\(configuration.bucket)/\(objectKey)"
+        let payloadHash = Self.sha256Hex("")
+        let signedHeaders = "host;x-amz-content-sha256;x-amz-date"
+        let canonicalHeaders = "host:\(host)\nx-amz-content-sha256:\(payloadHash)\nx-amz-date:\(amzDate)\n"
+        let canonicalRequest = [
+            "HEAD",
+            canonicalURI,
+            "",
+            canonicalHeaders,
+            signedHeaders,
+            payloadHash
+        ].joined(separator: "\n")
+        let stringToSign = [
+            "AWS4-HMAC-SHA256",
+            amzDate,
+            credentialScope,
+            Self.sha256Hex(canonicalRequest)
+        ].joined(separator: "\n")
+        let signingKey = Self.signingKey(
+            secretAccessKey: configuration.secretAccessKey,
+            dateStamp: dateStamp
+        )
+        let signature = Self.hmacSHA256Hex(stringToSign, key: signingKey)
+        let authorization = "AWS4-HMAC-SHA256 Credential=\(credential), SignedHeaders=\(signedHeaders), Signature=\(signature)"
+
+        components.path = canonicalURI
+
+        guard let url = components.url else {
+            throw R2StorageError.invalidEndpoint(configuration.endpoint)
+        }
+
+        let headers: HTTPHeaders = [
+            "host": host,
+            "x-amz-content-sha256": payloadHash,
+            "x-amz-date": amzDate,
+            "authorization": authorization
+        ]
+
+        let response = try await client.send(.HEAD, headers: headers, to: URI(string: url.absoluteString))
+
+        switch response.status.code {
+        case 200..<300:
+            return true
+        case 404:
+            return false
+        default:
+            throw R2StorageError.unsupported("Unexpected R2 HEAD response status: \(response.status.code)")
+        }
     }
 }
 

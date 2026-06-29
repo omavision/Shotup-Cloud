@@ -23,7 +23,7 @@ func configure(_ app: Application) async throws {
 
     if app.environment.name != "testing" {
         let r2Configuration = try R2Configuration.loadFromEnvironment()
-        app.r2Storage = R2StorageService(configuration: r2Configuration)
+        app.r2Storage = R2StorageService(configuration: r2Configuration, client: app.client)
     }
 
     // Migrations

@@ -1,5 +1,6 @@
 @testable import api
 import Foundation
+import Vapor
 import XCTest
 
 final class R2StorageTests: XCTestCase {
@@ -171,6 +172,74 @@ final class R2StorageTests: XCTestCase {
         }
     }
 
+    func testObjectExistsReturnsTrueForSuccessfulHeadResponse() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let client = StubR2Client(eventLoop: EmbeddedEventLoop(), status: .ok)
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] },
+            client: client
+        )
+
+        let exists = try await service.objectExists(
+            objectKey: "users/u/projects/p/scenes/s/frames/f/original.jpg"
+        )
+
+        XCTAssertTrue(exists)
+    }
+
+    func testObjectExistsReturnsFalseForMissingObject() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let client = StubR2Client(eventLoop: EmbeddedEventLoop(), status: .notFound)
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] },
+            client: client
+        )
+
+        let exists = try await service.objectExists(objectKey: "missing-key.jpg")
+
+        XCTAssertFalse(exists)
+    }
+
+    func testObjectExistsThrowsWhenClientNotConfigured() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let service = R2StorageService(configuration: try R2Configuration.load { values[$0] })
+
+        do {
+            _ = try await service.objectExists(objectKey: "any-key.jpg")
+            XCTFail("Expected objectExists to throw when client is not configured.")
+        } catch let error as R2StorageError {
+            XCTAssertEqual(error, .unsupported("R2 client is not configured."))
+        }
+    }
+
+    func testObjectExistsSignsHeadRequestWithExpectedHeaders() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let client = StubR2Client(eventLoop: EmbeddedEventLoop(), status: .ok)
+        let fixedDate = fixedDate
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] },
+            client: client,
+            now: { fixedDate }
+        )
+
+        _ = try await service.objectExists(
+            objectKey: "users/u/projects/p/scenes/s/frames/f/original.jpg"
+        )
+
+        let request = try XCTUnwrap(client.lastRequest)
+        XCTAssertEqual(request.method, .HEAD)
+        XCTAssertEqual(request.url.host, "test-account.r2.cloudflarestorage.com")
+        XCTAssertEqual(
+            request.url.path,
+            "/shotup-media-dev/users/u/projects/p/scenes/s/frames/f/original.jpg"
+        )
+        XCTAssertEqual(request.headers.first(name: "x-amz-date"), "20270101T000000Z")
+        XCTAssertTrue(
+            request.headers.first(name: "authorization")?
+                .hasPrefix("AWS4-HMAC-SHA256 Credential=test-access-key/20270101/auto/s3/aws4_request") ?? false
+        )
+    }
+
     private func environment(bucket: String) -> [String: String] {
         [
             "R2_ACCOUNT_ID": "test-account",
@@ -179,5 +248,25 @@ final class R2StorageTests: XCTestCase {
             "R2_BUCKET": bucket,
             "R2_ENDPOINT": "https://test-account.r2.cloudflarestorage.com"
         ]
+    }
+}
+
+final class StubR2Client: Client, @unchecked Sendable {
+    let eventLoop: any EventLoop
+    private let status: HTTPStatus
+    private(set) var lastRequest: ClientRequest?
+
+    init(eventLoop: any EventLoop, status: HTTPStatus) {
+        self.eventLoop = eventLoop
+        self.status = status
+    }
+
+    func delegating(to eventLoop: any EventLoop) -> any Client {
+        self
+    }
+
+    func send(_ request: ClientRequest) -> EventLoopFuture<ClientResponse> {
+        lastRequest = request
+        return eventLoop.makeSucceededFuture(ClientResponse(status: status))
     }
 }

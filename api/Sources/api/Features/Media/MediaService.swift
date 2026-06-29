@@ -51,4 +51,38 @@ struct MediaService {
             requiredHeaders: presigned.requiredHeaders
         )
     }
+
+    func confirmUpload(
+        userID: UUID,
+        payload: ConfirmUploadRequest
+    ) async throws -> ConfirmUploadResponse {
+        guard let asset = try await repository.findPendingUpload(objectKey: payload.objectKey) else {
+            throw Abort(.notFound, reason: "Pending media asset not found")
+        }
+
+        guard asset.userID == userID else {
+            throw Abort(.forbidden, reason: "You do not have access to this media asset")
+        }
+
+        guard try await storage.objectExists(objectKey: payload.objectKey) else {
+            throw Abort(.notFound, reason: "Object not found in storage")
+        }
+
+        let normalizedMimeType = payload.mimeType
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard normalizedMimeType == "image/jpeg" else {
+            throw Abort(.badRequest, reason: "Unsupported content type: \(payload.mimeType)")
+        }
+
+        _ = try await repository.markUploaded(
+            objectKey: payload.objectKey,
+            sizeBytes: payload.size,
+            checksum: payload.checksum,
+            uploadedAt: Date()
+        )
+
+        return ConfirmUploadResponse(success: true)
+    }
 }

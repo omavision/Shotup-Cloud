@@ -25,4 +25,7 @@ func routes(_ app: Application) throws {
 
     let sync = protected.grouped("sync")
     try sync.register(collection: SyncController())
+
+    let media = protected.grouped("media")
+    try media.register(collection: MediaController())
 }

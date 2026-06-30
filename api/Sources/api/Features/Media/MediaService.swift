@@ -2,6 +2,8 @@ import Fluent
 import Vapor
 
 struct MediaService {
+    static let objectNotFoundInStorageReason = "Object not found in storage"
+
     let database: any Database
     let storage: any R2StorageServicing
     let repository: any MediaRepository
@@ -75,7 +77,7 @@ struct MediaService {
         }
 
         guard try await storage.objectExists(objectKey: payload.objectKey) else {
-            throw Abort(.notFound, reason: "Object not found in storage")
+            throw Abort(.notFound, reason: Self.objectNotFoundInStorageReason)
         }
 
         let normalizedMimeType = payload.mimeType

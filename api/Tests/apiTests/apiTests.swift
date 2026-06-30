@@ -378,6 +378,97 @@ final class SyncIntegrationTests: XCTestCase {
         }
     }
 
+    func testOutOfOrderBatchShotBeforeSceneStillCreatesProjectSceneShot() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+
+            let response = try await sync(
+                app,
+                token: token,
+                changes: [shotUpsert(), sceneUpsert(), projectUpsert()]
+            )
+
+            XCTAssertTrue(response.conflicts.isEmpty)
+
+            let project = try await Project.find(projectID, on: app.db)
+            let scene = try await Scene.find(sceneID, on: app.db)
+            let shot = try await Shot.find(shotID, on: app.db)
+            XCTAssertNotNil(project)
+            XCTAssertNotNil(scene)
+            XCTAssertNotNil(shot)
+        }
+    }
+
+    func testBadShotDoesNotPreventUnrelatedSceneAndProjectChanges() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+            let orphanShotID = UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
+            let orphanSceneID = UUID(uuidString: "77777777-7777-7777-7777-777777777777")!
+
+            let orphanShot = TestSyncChange(
+                entity: .shot,
+                operation: .upsert,
+                id: orphanShotID,
+                updatedAt: "2026-06-25T17:00:00Z",
+                payload: [
+                    "sceneID": orphanSceneID.uuidString,
+                    "title": "Orphan Shot",
+                    "notes": "References a scene that does not exist",
+                    "shotSize": "Wide",
+                    "cameraMovement": "Static",
+                    "lensMM": "35",
+                    "sortOrder": "1"
+                ]
+            )
+
+            let response = try await sync(
+                app,
+                token: token,
+                changes: [orphanShot, projectUpsert(), sceneUpsert()]
+            )
+
+            XCTAssertEqual(response.conflicts.count, 1)
+            XCTAssertEqual(response.conflicts.first?.entity, .shot)
+            XCTAssertEqual(response.conflicts.first?.id, orphanShotID)
+
+            let project = try await Project.find(projectID, on: app.db)
+            let scene = try await Scene.find(sceneID, on: app.db)
+            let orphan = try await Shot.find(orphanShotID, on: app.db)
+            XCTAssertNotNil(project)
+            XCTAssertNotNil(scene)
+            XCTAssertNil(orphan)
+        }
+    }
+
+    func testUnsupportedEntityBehaviorUnchanged() async throws {
+        try await withApp { app in
+            let token = try await devLogin(app)
+            let mediaID = UUID(uuidString: "88888888-8888-8888-8888-888888888888")!
+
+            let mediaChange = TestSyncChange(
+                entity: .media,
+                operation: .upsert,
+                id: mediaID,
+                updatedAt: "2026-06-25T17:00:00Z",
+                payload: ["foo": "bar"]
+            )
+
+            let response = try await sync(
+                app,
+                token: token,
+                changes: [projectUpsert(), mediaChange]
+            )
+
+            XCTAssertEqual(response.conflicts.count, 1)
+            XCTAssertEqual(response.conflicts.first?.entity, .media)
+            XCTAssertEqual(response.conflicts.first?.id, mediaID)
+            XCTAssertEqual(response.conflicts.first?.reason, "Unsupported entity")
+
+            let project = try await Project.find(projectID, on: app.db)
+            XCTAssertNotNil(project)
+        }
+    }
+
     @discardableResult
     private func seedProjectSceneShot(
         _ app: Application,

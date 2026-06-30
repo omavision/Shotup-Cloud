@@ -7,8 +7,20 @@ import JWT
 
 /// Configures your application.
 func configure(_ app: Application) async throws {
-    // Uncomment to serve files from /Public folder.
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+
+    let sslMode = Environment.get("DATABASE_SSL_MODE") ?? "prefer"
+    let tlsConfiguration: PostgresConnection.Configuration.TLS
+
+    if sslMode == "require" {
+        let caCertPath = Environment.get("DATABASE_CA_CERT")
+            ?? "\(app.directory.workingDirectory)Certificates/digitalocean-ca.crt"
+        var nioSSLConfiguration = TLSConfiguration.clientDefault
+        nioSSLConfiguration.trustRoots = .file(caCertPath)
+        tlsConfiguration = .require(try .init(configuration: nioSSLConfiguration))
+    } else {
+        tlsConfiguration = .prefer(try .init(configuration: .clientDefault))
+    }
 
     app.databases.use(.postgres(
         configuration: .init(
@@ -17,7 +29,7 @@ func configure(_ app: Application) async throws {
             username: Environment.get("DATABASE_USERNAME") ?? "shotup",
             password: Environment.get("DATABASE_PASSWORD") ?? "shotup_dev_password",
             database: Environment.get("DATABASE_NAME") ?? "shotup_cloud_dev",
-            tls: .prefer(try .init(configuration: .clientDefault))
+            tls: tlsConfiguration
         )
     ), as: .psql)
 
@@ -26,7 +38,6 @@ func configure(_ app: Application) async throws {
         app.r2Storage = R2StorageService(configuration: r2Configuration, client: app.client)
     }
 
-    // Migrations
     app.migrations.add(CreateUser())
     app.migrations.add(CreateProject())
     app.migrations.add(CreateScene())
@@ -35,14 +46,12 @@ func configure(_ app: Application) async throws {
     app.migrations.add(CreateRefreshToken())
     app.migrations.add(CreateSyncEvent())
 
-   // JWT
-let jwtSecret = Environment.get("JWT_SECRET") ?? "development-secret"
+    let jwtSecret = Environment.get("JWT_SECRET") ?? "development-secret"
 
-await app.jwt.keys.add(
-    hmac: HMACKey(from: Data(jwtSecret.utf8)),
-    digestAlgorithm: .sha256
-)
+    await app.jwt.keys.add(
+        hmac: HMACKey(from: Data(jwtSecret.utf8)),
+        digestAlgorithm: .sha256
+    )
 
-    // Routes
     try routes(app)
 }

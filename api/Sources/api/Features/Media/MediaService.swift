@@ -127,4 +127,29 @@ struct MediaService {
             expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
         )
     }
+
+    func checkExists(
+        userID: UUID,
+        payload: MediaExistsRequest
+    ) async throws -> MediaExistsResponse {
+        guard let asset = try await repository.findByFrameID(payload.frameID).first else {
+            return MediaExistsResponse(
+                exists: false,
+                mediaAssetID: nil,
+                objectKey: nil,
+                status: nil
+            )
+        }
+
+        guard asset.userID == userID else {
+            throw Abort(.forbidden, reason: "You do not have access to this media asset")
+        }
+
+        return MediaExistsResponse(
+            exists: true,
+            mediaAssetID: asset.id,
+            objectKey: asset.objectKey,
+            status: asset.status
+        )
+    }
 }

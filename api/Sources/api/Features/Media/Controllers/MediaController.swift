@@ -6,6 +6,7 @@ struct MediaController: RouteCollection {
         routes.post("request-upload", use: requestUpload)
         routes.post("confirm-upload", use: confirmUpload)
         routes.post("request-download", use: requestDownload)
+        routes.post("exists", use: exists)
     }
 
     @Sendable
@@ -129,6 +130,22 @@ struct MediaController: RouteCollection {
 
             throw error
         }
+    }
+
+    @Sendable
+    func exists(req: Request) async throws -> Response {
+        let auth = try req.auth.require(AuthenticatedUser.self)
+        let payload = try req.content.decode(MediaExistsRequest.self)
+
+        guard let storage = req.application.r2Storage else {
+            throw Abort(.internalServerError, reason: "Storage service unavailable")
+        }
+
+        let repository = FluentMediaRepository(database: req.db)
+        let service = MediaService(database: req.db, storage: storage, repository: repository)
+
+        let response = try await service.checkExists(userID: auth.id, payload: payload)
+        return try await APIResponse(data: response).encodeResponse(for: req)
     }
 
     @Sendable

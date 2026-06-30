@@ -26,6 +26,7 @@ final class MediaUploadIntegrationTests: XCTestCase {
         try await withApp { app in
             let owner = try await devLogin(app, appleUserID: "dev.media.owner")
             let frame = try await seedProjectSceneShot(app, userID: owner.userID)
+            var capturedObjectKey: String?
 
             try await app.test(
                 .POST,
@@ -48,8 +49,56 @@ final class MediaUploadIntegrationTests: XCTestCase {
                     XCTAssertEqual(body.data?.requiredHeaders["Content-Type"], "image/jpeg")
                     XCTAssertTrue(body.data?.objectKey.contains(frame.shotID.uuidString.lowercased()) ?? false)
                     XCTAssertNotNil(body.data?.uploadURL)
+                    capturedObjectKey = body.data?.objectKey
                 }
             )
+
+            let objectKey = try XCTUnwrap(capturedObjectKey)
+            let asset = try await MediaAsset.query(on: app.db)
+                .filter(\.$objectKey == objectKey)
+                .first()
+
+            XCTAssertNotNil(asset)
+            XCTAssertEqual(asset?.status, MediaAssetStatus.pending.rawValue)
+            XCTAssertEqual(asset?.sizeBytes, 0)
+            XCTAssertNil(asset?.checksum)
+            XCTAssertNil(asset?.uploadedAt)
+            XCTAssertEqual(asset?.shotID, frame.shotID)
+        }
+    }
+
+    func testRequestUploadUpsertsPendingAssetOnRepeat() async throws {
+        try await withApp { app in
+            let owner = try await devLogin(app, appleUserID: "dev.media.upsert")
+            let frame = try await seedProjectSceneShot(app, userID: owner.userID)
+
+            let request = RequestUploadRequest(
+                projectID: frame.projectID,
+                sceneID: frame.sceneID,
+                frameID: frame.shotID,
+                contentType: "image/jpeg"
+            )
+
+            for _ in 1...2 {
+                try await app.test(
+                    .POST,
+                    "api/v1/media/request-upload",
+                    beforeRequest: { req in
+                        req.headers.bearerAuthorization = BearerAuthorization(token: owner.accessToken)
+                        try req.content.encode(request)
+                    },
+                    afterResponse: { res async throws in
+                        XCTAssertEqual(res.status, .ok)
+                    }
+                )
+            }
+
+            let assets = try await MediaAsset.query(on: app.db)
+                .filter(\.$shotID == frame.shotID)
+                .all()
+
+            XCTAssertEqual(assets.count, 1)
+            XCTAssertEqual(assets.first?.status, MediaAssetStatus.pending.rawValue)
         }
     }
 

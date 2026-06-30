@@ -24,6 +24,7 @@ protocol R2StorageServicing: Sendable {
 struct R2PresignedUpload: Content, Equatable, Sendable {
     let uploadURL: String
     let objectKey: String
+    let bucket: String
     let expiresAt: Date
     let requiredHeaders: [String: String]
 }
@@ -129,6 +130,7 @@ struct R2StorageService: R2StorageServicing {
         return R2PresignedUpload(
             uploadURL: uploadURL,
             objectKey: objectKey,
+            bucket: configuration.bucket,
             expiresAt: expiresAt,
             requiredHeaders: ["Content-Type": normalizedContentType]
         )

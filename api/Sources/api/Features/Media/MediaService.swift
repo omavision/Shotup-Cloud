@@ -44,6 +44,16 @@ struct MediaService {
             contentType: payload.contentType
         )
 
+        _ = try await repository.upsertPendingUpload(
+            userID: userID,
+            projectID: payload.projectID,
+            sceneID: payload.sceneID,
+            shotID: payload.frameID,
+            objectKey: presigned.objectKey,
+            bucket: presigned.bucket,
+            mimeType: normalizedContentType
+        )
+
         return RequestUploadResponse(
             uploadURL: presigned.uploadURL,
             objectKey: presigned.objectKey,

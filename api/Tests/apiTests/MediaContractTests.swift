@@ -84,12 +84,14 @@ final class MediaContractTests: XCTestCase {
     func testRequestDownloadResponseRoundTrips() throws {
         let value = RequestDownloadResponse(
             downloadURL: "https://example.com/download",
+            objectKey: "users/u/projects/p/scenes/s/frames/f/original.jpg",
             expiresAt: expiresAt
         )
 
         let decoded = try roundTrip(value)
 
         XCTAssertEqual(decoded.downloadURL, "https://example.com/download")
+        XCTAssertEqual(decoded.objectKey, "users/u/projects/p/scenes/s/frames/f/original.jpg")
         XCTAssertEqual(decoded.expiresAt, expiresAt)
     }
 

@@ -5,6 +5,7 @@ struct MediaController: RouteCollection {
     func boot(routes: any RoutesBuilder) throws {
         routes.post("request-upload", use: requestUpload)
         routes.post("confirm-upload", use: confirmUpload)
+        routes.post("request-download", use: requestDownload)
     }
 
     @Sendable
@@ -125,6 +126,57 @@ struct MediaController: RouteCollection {
             }
 
             logger.warning("media.upload.confirm.failed", metadata: metadata)
+
+            throw error
+        }
+    }
+
+    @Sendable
+    func requestDownload(req: Request) async throws -> Response {
+        let traceID = MediaUploadTrace.resolve(from: req)
+        var logger = req.logger
+        logger[metadataKey: "traceID"] = .string(traceID)
+
+        let auth = try req.auth.require(AuthenticatedUser.self)
+        let payload = try req.content.decode(RequestDownloadRequest.self)
+
+        guard let storage = req.application.r2Storage else {
+            throw Abort(.internalServerError, reason: "Storage service unavailable")
+        }
+
+        let repository = FluentMediaRepository(database: req.db)
+        let service = MediaService(database: req.db, storage: storage, repository: repository)
+
+        logger.info("media.download.request.started", metadata: [
+            "event": .string("media.download.request.started"),
+            "userID": .string(auth.id.uuidString),
+            "frameID": .string(payload.frameID.uuidString)
+        ])
+
+        let start = Date()
+
+        do {
+            let response = try await service.requestDownload(userID: auth.id, payload: payload)
+            let requestDurationMs = MediaUploadTrace.durationMilliseconds(since: start)
+
+            logger.info("media.download.request.completed", metadata: [
+                "event": .string("media.download.request.completed"),
+                "objectKey": .string(response.objectKey),
+                "requestDurationMs": .stringConvertible(requestDurationMs)
+            ])
+
+            let apiResponse = try await APIResponse(data: response).encodeResponse(for: req)
+            apiResponse.headers.replaceOrAdd(name: MediaUploadTrace.headerName, value: traceID)
+            return apiResponse
+        } catch {
+            let requestDurationMs = MediaUploadTrace.durationMilliseconds(since: start)
+            let reason = (error as? any AbortError)?.reason ?? String(describing: error)
+
+            logger.warning("media.download.request.failed", metadata: [
+                "event": .string("media.download.request.failed"),
+                "reason": .string(reason),
+                "requestDurationMs": .stringConvertible(requestDurationMs)
+            ])
 
             throw error
         }

@@ -155,19 +155,68 @@ final class R2StorageTests: XCTestCase {
         }
     }
 
-    func testNonUploadMethodsAreExplicitlyUnsupported() async throws {
+    func testPresignedDownloadURLGeneration() async throws {
+        let values = environment(bucket: R2Configuration.devBucket)
+        let fixedDate = fixedDate
+        let service = R2StorageService(
+            configuration: try R2Configuration.load { values[$0] },
+            now: { fixedDate }
+        )
+        let objectKey = "users/u/projects/p/scenes/s/frames/f/original.jpg"
+
+        let downloadURL = try await service.presignedDownloadURL(objectKey: objectKey, expiresIn: 300)
+
+        let components = try XCTUnwrap(URLComponents(string: downloadURL))
+        XCTAssertEqual(components.scheme, "https")
+        XCTAssertEqual(components.host, "test-account.r2.cloudflarestorage.com")
+        XCTAssertEqual(components.path, "/shotup-media-dev/\(objectKey)")
+
+        let query = Dictionary(
+            uniqueKeysWithValues: try XCTUnwrap(components.queryItems).map {
+                ($0.name, try XCTUnwrap($0.value))
+            }
+        )
+
+        XCTAssertEqual(query["X-Amz-Algorithm"], "AWS4-HMAC-SHA256")
+        XCTAssertEqual(query["X-Amz-Credential"], "test-access-key/20270101/auto/s3/aws4_request")
+        XCTAssertEqual(query["X-Amz-Date"], "20270101T000000Z")
+        XCTAssertEqual(query["X-Amz-Expires"], "300")
+        XCTAssertEqual(query["X-Amz-SignedHeaders"], "host")
+        XCTAssertNotNil(query["X-Amz-Signature"])
+        XCTAssertEqual(query["X-Amz-Signature"]?.count, 64)
+    }
+
+    func testPresignedDownloadRejectsInvalidEndpointConfiguration() async throws {
+        let config = R2Configuration(
+            accountID: "test-account",
+            accessKeyID: "test-access-key",
+            secretAccessKey: "test-secret-key",
+            bucket: R2Configuration.devBucket,
+            endpoint: "not a url"
+        )
+        let service = R2StorageService(configuration: config)
+
+        do {
+            _ = try await service.presignedDownloadURL(objectKey: "test.jpg", expiresIn: 300)
+            XCTFail("Expected invalid endpoint to be rejected.")
+        } catch let error as R2StorageError {
+            XCTAssertEqual(error, .invalidEndpoint("not a url"))
+        }
+    }
+
+    func testDeleteObjectIsExplicitlyUnsupported() async throws {
         let values = environment(bucket: R2Configuration.devBucket)
         let service = R2StorageService(
             configuration: try R2Configuration.load { values[$0] }
         )
 
         do {
-            _ = try await service.presignedDownloadURL(objectKey: "test.jpg", expiresIn: 300)
-            XCTFail("Expected presignedDownloadURL to be unsupported.")
+            try await service.deleteObject(objectKey: "test.jpg")
+            XCTFail("Expected deleteObject to be unsupported.")
         } catch let error as R2StorageError {
             XCTAssertEqual(
                 error,
-                .unsupported("R2 presigned download URLs are not implemented yet.")
+                .unsupported("R2 object deletion is not implemented yet.")
             )
         }
     }

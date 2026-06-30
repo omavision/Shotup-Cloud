@@ -3,6 +3,7 @@ import Vapor
 
 struct MediaService {
     static let objectNotFoundInStorageReason = "Object not found in storage"
+    static let mediaNotUploadedReason = "Media not uploaded yet"
 
     let database: any Database
     let storage: any R2StorageServicing
@@ -96,5 +97,34 @@ struct MediaService {
         )
 
         return ConfirmUploadResponse(success: true)
+    }
+
+    func requestDownload(
+        userID: UUID,
+        payload: RequestDownloadRequest
+    ) async throws -> RequestDownloadResponse {
+        guard let asset = try await repository.findByFrameID(payload.frameID).first else {
+            throw Abort(.notFound, reason: "Media asset not found")
+        }
+
+        guard asset.userID == userID else {
+            throw Abort(.forbidden, reason: "You do not have access to this media asset")
+        }
+
+        guard asset.status == MediaAssetStatus.uploaded.rawValue else {
+            throw Abort(.conflict, reason: Self.mediaNotUploadedReason)
+        }
+
+        let expiresIn = R2StorageService.downloadExpirationSeconds
+        let downloadURL = try await storage.presignedDownloadURL(
+            objectKey: asset.objectKey,
+            expiresIn: expiresIn
+        )
+
+        return RequestDownloadResponse(
+            downloadURL: downloadURL,
+            objectKey: asset.objectKey,
+            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn))
+        )
     }
 }

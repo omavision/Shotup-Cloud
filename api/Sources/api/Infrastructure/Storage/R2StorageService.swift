@@ -31,6 +31,7 @@ struct R2PresignedUpload: Content, Equatable, Sendable {
 
 struct R2StorageService: R2StorageServicing {
     static let uploadExpirationSeconds = 900
+    static let downloadExpirationSeconds = 900
 
     let configuration: R2Configuration
     private let now: @Sendable () -> Date
@@ -140,7 +141,64 @@ struct R2StorageService: R2StorageServicing {
         objectKey: String,
         expiresIn seconds: Int
     ) async throws -> String {
-        throw R2StorageError.unsupported("R2 presigned download URLs are not implemented yet.")
+        guard var components = URLComponents(string: configuration.endpoint),
+              components.scheme == "https" || components.scheme == "http",
+              let host = components.host,
+              !host.isEmpty
+        else {
+            throw R2StorageError.invalidEndpoint(configuration.endpoint)
+        }
+
+        let requestDate = now()
+        let dateStamp = Self.dateStampFormatter.string(from: requestDate)
+        let amzDate = Self.amzDateFormatter.string(from: requestDate)
+        let credentialScope = "\(dateStamp)/auto/s3/aws4_request"
+        let credential = "\(configuration.accessKeyID)/\(credentialScope)"
+        let canonicalURI = "/\(configuration.bucket)/\(objectKey)"
+        let signedHeaders = "host"
+        let queryItems = [
+            URLQueryItem(name: "X-Amz-Algorithm", value: "AWS4-HMAC-SHA256"),
+            URLQueryItem(name: "X-Amz-Credential", value: credential),
+            URLQueryItem(name: "X-Amz-Date", value: amzDate),
+            URLQueryItem(name: "X-Amz-Expires", value: "\(seconds)"),
+            URLQueryItem(name: "X-Amz-SignedHeaders", value: signedHeaders)
+        ]
+        let canonicalQuery = Self.canonicalQueryString(queryItems)
+        let canonicalHeaders = "host:\(host)\n"
+        let canonicalRequest = [
+            "GET",
+            canonicalURI,
+            canonicalQuery,
+            canonicalHeaders,
+            signedHeaders,
+            "UNSIGNED-PAYLOAD"
+        ].joined(separator: "\n")
+        let stringToSign = [
+            "AWS4-HMAC-SHA256",
+            amzDate,
+            credentialScope,
+            Self.sha256Hex(canonicalRequest)
+        ].joined(separator: "\n")
+        let signingKey = Self.signingKey(
+            secretAccessKey: configuration.secretAccessKey,
+            dateStamp: dateStamp
+        )
+        let signature = Self.hmacSHA256Hex(
+            stringToSign,
+            key: signingKey
+        )
+
+        var signedQueryItems = queryItems
+        signedQueryItems.append(URLQueryItem(name: "X-Amz-Signature", value: signature))
+
+        components.path = canonicalURI
+        components.queryItems = signedQueryItems
+
+        guard let downloadURL = components.url?.absoluteString else {
+            throw R2StorageError.invalidEndpoint(configuration.endpoint)
+        }
+
+        return downloadURL
     }
 
     func deleteObject(objectKey: String) async throws {

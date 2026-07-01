@@ -34,5 +34,7 @@ protocol MediaRepository: Sendable {
 
     func findPendingUpload(objectKey: String) async throws -> MediaAsset?
 
+    func findUploadedMedia(userID: UUID, projectIDs: [UUID]) async throws -> [MediaAsset]
+
     func delete(_ asset: MediaAsset) async throws
 }

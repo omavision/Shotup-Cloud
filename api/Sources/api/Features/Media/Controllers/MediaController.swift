@@ -7,6 +7,19 @@ struct MediaController: RouteCollection {
         routes.post("confirm-upload", use: confirmUpload)
         routes.post("request-download", use: requestDownload)
         routes.post("exists", use: exists)
+        routes.post("manifest", use: manifest)
+    }
+
+    @Sendable
+    func manifest(req: Request) async throws -> APIResponse<MediaManifestResponse> {
+        let auth = try req.auth.require(AuthenticatedUser.self)
+        let payload = try req.content.decode(MediaManifestRequest.self)
+
+        let repository = FluentMediaRepository(database: req.db)
+        let service = MediaManifestService(repository: repository)
+        let response = try await service.manifest(userID: auth.id, payload: payload)
+
+        return APIResponse(data: response)
     }
 
     @Sendable

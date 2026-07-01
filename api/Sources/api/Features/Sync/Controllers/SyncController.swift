@@ -3,8 +3,20 @@ import Vapor
 
 struct SyncController: RouteCollection {
     func boot(routes: any RoutesBuilder) throws {
+        routes.get("status", use: status)
         routes.post("pull", use: pull)
         routes.post(use: sync)
+    }
+
+    @Sendable
+    func status(req: Request) async throws -> APIResponse<SyncStatusResponse> {
+        let user = try req.auth.require(AuthenticatedUser.self)
+        let serverTime = Date()
+
+        let response = try await SyncStatusService(database: req.db)
+            .status(for: user, serverTime: serverTime)
+
+        return APIResponse(data: response)
     }
 
     @Sendable

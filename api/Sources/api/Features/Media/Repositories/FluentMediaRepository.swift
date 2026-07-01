@@ -106,6 +106,20 @@ struct FluentMediaRepository: MediaRepository {
             .first()
     }
 
+    func findUploadedMedia(userID: UUID, projectIDs: [UUID]) async throws -> [MediaAsset] {
+        guard projectIDs.isEmpty == false else {
+            return []
+        }
+
+        return try await MediaAsset.query(on: database)
+            .filter(\.$userID == userID)
+            .filter(\.$projectID ~~ projectIDs)
+            .filter(\.$status == MediaAssetStatus.uploaded.rawValue)
+            .sort(\.$uploadedAt, .ascending)
+            .sort(\.$shotID, .ascending)
+            .all()
+    }
+
     func delete(_ asset: MediaAsset) async throws {
         try await asset.delete(on: database)
     }
